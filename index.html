@@ -1,0 +1,48 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Czujnik przyspieszeń</title>
+<style>
+body{font-family:sans-serif;background:#111;color:#eee;margin:8px}
+canvas{width:100%;height:60vh;background:#000;border:1px solid #444}
+span{margin-right:12px}
+</style></head><body>
+<h3>Przyspieszenia [g] <small id="st" style="font-weight:normal;color:#999">łączenie...</small></h3>
+<div><span style="color:#f55">X: <b id="x">0</b></span>
+<span style="color:#5f5">Y: <b id="y">0</b></span>
+<span style="color:#58f">Z: <b id="z">0</b></span></div>
+<canvas id="c"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+const TOPIC='acc-car-k7x92qpldane';
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+const N=300,data=[[],[],[]],cols=['#f55','#5f5','#58f'],R=4;
+function resize(){c.width=c.clientWidth;c.height=c.clientHeight}
+resize();addEventListener('resize',resize);
+function draw(){
+  ctx.clearRect(0,0,c.width,c.height);
+  ctx.strokeStyle='#333';ctx.beginPath();
+  for(let g=-R;g<=R;g++){const y=c.height/2-g*c.height/(2*R);ctx.moveTo(0,y);ctx.lineTo(c.width,y);}
+  ctx.stroke();
+  for(let k=0;k<3;k++){
+    ctx.strokeStyle=cols[k];ctx.beginPath();
+    data[k].forEach((v,i)=>{
+      const px=i*c.width/(N-1),py=c.height/2-v*c.height/(2*R);
+      i?ctx.lineTo(px,py):ctx.moveTo(px,py);
+    });
+    ctx.stroke();
+  }
+}
+const client=mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+client.on('connect',()=>{st.textContent='połączono, czekam na dane';client.subscribe(TOPIC)});
+client.on('close',()=>{st.textContent='brak połączenia'});
+client.on('message',(t,msg)=>{
+  st.textContent='na żywo';
+  msg.toString().split(';').forEach(s=>{
+    const v=s.split(',').map(Number);
+    if(v.length!==3||v.some(isNaN))return;
+    for(let k=0;k<3;k++){data[k].push(v[k]);if(data[k].length>N)data[k].shift();}
+    x.textContent=v[0].toFixed(2);y.textContent=v[1].toFixed(2);z.textContent=v[2].toFixed(2);
+  });
+});
+(function loop(){draw();requestAnimationFrame(loop)})();
+</script></body></html>
